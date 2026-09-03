@@ -1,6 +1,6 @@
 # 部署说明(内部私有 NuGet 源)
 
-基于 loicsharma/BaGet 的 fork,含一个本地修复。
+基于 loicsharma/BaGet 的 fork,含本地修复。
 
 文中占位符约定:
 - `<内网地址>`:BaGet 容器所在机器的内网 IP 与端口(如 `10.0.0.x:5555`)
@@ -38,6 +38,16 @@ docker run -d --name baget --restart unless-stopped -p <内网端口>:80 \
   baget:fixed
 ```
 
+## 前置 nginx 反代(必须)
+
+```nginx
+proxy_set_header Host $http_host;
+```
+
+BaGet 按请求 Host 生成服务索引里的绝对 URL;不加这条时索引公布的是内网地址,
+外网客户端 restore 与推送全部超时。修改后所有老客户端需执行一次
+`dotnet nuget locals http-cache --clear`,否则继续用缓存的旧索引。
+
 ## 踩过的坑(重建容器/排障时必读)
 
 1. **`Database__ConnectionString` 必须指向卷内路径(如 `/var/baget/baget.db`)**。
@@ -45,27 +55,26 @@ docker run -d --name baget --restart unless-stopped -p <内网端口>:80 \
    而存储卷文件还在,两边不一致后推送报 500(CreateNew 撞上无主残留文件)。若已发生:
    清掉卷内 `packages/` 目录后重推。
 2. **`AllowPackageOverwrites=true`**:重复版本包直接推送返回 409,开启后覆盖(先删后写)。
-3. **服务索引按请求 Host 生成绝对 URL**:前置 nginx 必须加
-   `proxy_set_header Host $http_host;`,否则索引里公布的是内网地址,
-   外网客户端 restore 与 push 均不可用;仅内网直连时可忽略。
-4. **客户端 NuGet 要求 HTTPS**:HTTP 源必须在其 NuGet.Config 中显式
+3. **客户端 NuGet 要求 HTTPS**:HTTP 源必须在其 NuGet.Config 中显式
    `allowInsecureConnections="true"`,且推送/还原用**源名**引用(裸 URL 匹配不到该配置)。
+4. **API 密钥无法明文存进 NuGet.Config**:`apikeys` 节存的是 DPAPI 加密值,
+   手写明文会报 "not a valid Base-64 string";`dotnet` CLI 无 setApiKey 命令,
+   每次推送带 `-k <密钥>` 即可(或装完整版 nuget.exe 执行一次 setApiKey)。
 
 ## 日常使用
 
 客户端注册源(一次性):
 
 ```powershell
-# 还原用
 dotnet nuget add source http://<公网地址>/v3/index.json --name BaGet --allow-insecure-connections
-# 推送用(坑 3 未修前 v3 索引公布内网地址,故注册 v2 发布端点直连)
-dotnet nuget add source http://<公网地址>/api/v2/package --name BaGetPush --allow-insecure-connections
 ```
 
 推送包:
 
 ```powershell
-dotnet nuget push -s BaGetPush -k <API密钥> <包路径>.nupkg
+dotnet nuget push -s BaGet -k <API密钥> <包路径>.nupkg
+# 或直接 URL(NuGet 会按 URL 匹配到已配置源的 allowInsecureConnections)
+dotnet nuget push -s http://<公网地址>/v3/index.json -k <API密钥> <包路径>.nupkg
 ```
 
 验证推送成功且可下载:
@@ -77,7 +86,8 @@ curl -o /dev/null -w "%{http_code} %{size_download}B\n" \
 
 ## 已知遗留
 
-- 运行时为 .NET Core 3.1(已 EOL),NuGet.Protocol 5.10.0 有已知高危漏洞告警(NU1903),
-  上游停更;内网只读场景暂可接受,长期建议评估迁移维护活跃的 fork BaGetter。
+- 运行时为 .NET Core 3.1(已 EOL),上游停更;内网只读场景暂可接受,
+  长期建议评估迁移维护活跃的 fork BaGetter。
 - 镜像包(nuget.azure.cn 回源)包文件不落盘;需完全离线的包请手动 push 进本地存储。
 - `<数据卷路径>` 现含数据库与全部已推包,需纳入备份。
+- `AllowPackageOverwrites=true` 意味着持密钥者可覆盖任意已推包;迁移稳定后可关闭以防误覆盖。
