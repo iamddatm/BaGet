@@ -29,15 +29,19 @@ namespace BaGet.Core
                 throw new InvalidOperationException("Package does not have a readme!");
             }
 
-            return await package.GetStreamAsync(readmePath, cancellationToken);
+            // Windows 打包的 nuspec 中 readme 路径可能带反斜杠(如 docs\PACKAGE.md),而 zip 条目名一律用正斜杠;
+            // 本仓库引用的旧版 NuGet.Packaging 查找条目时不做路径归一化,会抛 FileNotFoundException,
+            // 导致解析正常官方包失败、推送被拒(HTTP 400),故在此统一转正斜杠。
+            return await package.GetStreamAsync(readmePath.Replace('\\', '/'), cancellationToken);
         }
 
         public async static Task<Stream> GetIconAsync(
             this PackageArchiveReader package,
             CancellationToken cancellationToken)
         {
+            // 同上:icon 路径做同样的反斜杠归一化(StripLeadingDirectorySeparators 只去前导分隔符,不处理内部反斜杠)
             return await package.GetStreamAsync(
-                PathUtility.StripLeadingDirectorySeparators(package.NuspecReader.GetIcon()),
+                PathUtility.StripLeadingDirectorySeparators(package.NuspecReader.GetIcon()).Replace('\\', '/'),
                 cancellationToken);
         }
 
