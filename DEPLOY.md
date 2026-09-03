@@ -10,9 +10,11 @@
 
 - `src/BaGet.Core/Extensions/PackageArchiveReaderExtensions.cs`:
   nuspec 中 readme/icon 路径按 Windows 打包惯例含反斜杠(如 `docs\PACKAGE.md`),
-  而 zip 条目名一律为正斜杠;仓库引用的旧版 NuGet.Packaging 查条目不做路径归一化,
+  而 zip 条目名一律为正斜杠;NuGet.Packaging 查条目不做路径归一化(实测 5.10.0 与 6.8.2 皆如此),
   导致解析 nuget.org 官方包抛 FileNotFoundException,推送被误判为无效包(HTTP 400)。
-  修复:读取前统一将反斜杠替换为正斜杠。
+  修复:读取前统一将反斜杠替换为正斜杠(此问题无依赖升级捷径,只能靠本补丁)。
+
+- `src/Directory.Build.props`:NuGet.* 依赖 5.10.0 → 6.8.2,消除 NU1903 高危 / NU1901 低危漏洞告警。
 
 ## 构建镜像(服务器上)
 

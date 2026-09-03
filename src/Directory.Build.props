@@ -40,7 +40,11 @@
     <MicrosoftAspNetCorePackageVersion>3.1.18</MicrosoftAspNetCorePackageVersion>
     <MicrosoftEntityFrameworkCorePackageVersion>3.1.18</MicrosoftEntityFrameworkCorePackageVersion>
     <MicrosoftExtensionsPackageVersion>3.1.18</MicrosoftExtensionsPackageVersion>
-    <NuGetPackageVersion>5.10.0</NuGetPackageVersion>
+    <!-- 5.10.0 触发 NU1903 高危告警(GHSA-6qmf-mmc7-6c2p / GHSA-g3q9-xf95-8hp5,HTTP 重定向泄漏凭据);
+         6.8.0 修高危、6.8.2 修 NU1901 低危(GHSA-g4vj-cjjj-v7hg),6.8.2 同时清零。
+         注意:实测 6.8.2 的 PackageArchiveReader.GetStream 仍不归一化反斜杠路径,
+         nuspec 反斜杠问题必须依赖 PackageArchiveReaderExtensions 中的修复,勿再指望升级解决 -->
+    <NuGetPackageVersion>6.8.2</NuGetPackageVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' == ''">
